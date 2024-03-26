@@ -30,6 +30,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"strconv"
 	"sync"
@@ -100,13 +101,117 @@ func (d *Driver) runCSVWriter(records chan interface{}, filename string, writerD
 	writerDone.Done()
 }
 
-func DAGCreation(functions []*common.Function) *list.List {
-	linkedList := list.New()
-	// Assigning nodes one after another
-	for _, function := range functions {
-		linkedList.PushBack(function)
+func createDAGWorkflow(functionList []*common.Function, maxDepth int, maxWidth int) (*list.List, int64) {
+	// Generating the number of Invocations per Depth
+	widthList := []int{}
+	widthList = append(widthList, 1)
+	for i := 1; i < maxDepth-1; i++ {
+		widthList = append(widthList, (rand.Intn(maxWidth-widthList[i-1]+1) + widthList[i-1]))
 	}
-	return linkedList
+	widthList = append(widthList, maxWidth)
+	log.Infof("DAG Created with size %d", widthList)
+	queue := []*list.List{}
+	linkedList := list.New()
+	var totalFunctionsToInvoke int64
+	var additionalBranches int
+	var nodeList []*list.List
+	node := &common.Node{Function: functionList[0], Depth: 0}
+	linkedList.PushBack(node)
+	initialList := linkedList
+	listNode := linkedList.Front()
+	totalFunctionsToInvoke++
+	for i := 0; i < len(widthList); i++ {
+		widthList[i] -= 1
+	}
+	for {
+		node = listNode.Value.(*common.Node)
+		// Signalling the end
+		if node.Depth == len(widthList)-1 {
+			if len(queue) == 0 {
+				return initialList, totalFunctionsToInvoke
+			}
+			linkedList = queue[0]
+			queue = queue[1:]
+			listNode = linkedList.Front()
+			continue
+		}
+		// Continuing the list
+		child := &common.Node{Function: functionList[totalFunctionsToInvoke%4], Depth: node.Depth + 1}
+		log.Infof("Added node %s", child.Function.Name)
+		linkedList.PushBack(child)
+		totalFunctionsToInvoke++
+		if widthList[node.Depth+1] > 0 {
+			if len(queue) < 1 || (queue[0].Front().Value.(*common.Node).Depth > node.Depth) {
+				additionalBranches = widthList[node.Depth+1]
+			} else {
+				additionalBranches = rand.Intn(widthList[node.Depth+1] + 1)
+			}
+			for i := node.Depth + 1; i < len(widthList); i++ {
+				widthList[i] -= additionalBranches
+			}
+			log.Infof("Added Branch of %d size at depth %d", additionalBranches, node.Depth)
+		} else {
+			additionalBranches = 0
+		}
+		// Adding Branches
+		nodeList = make([]*list.List, additionalBranches)
+		if additionalBranches > 0 {
+			for i := 0; i < additionalBranches; i++ {
+				newList := list.New()
+				child := &common.Node{Function: functionList[totalFunctionsToInvoke%4], Depth: node.Depth + 1}
+				log.Infof("Adding Node %s", child.Function.Name)
+				newList.PushBack(child)
+				totalFunctionsToInvoke++
+				nodeList[i] = newList
+				queue = append(queue, newList)
+			}
+		}
+		//assign next
+		node.Branches = nodeList
+		listNode = listNode.Next()
+
+	}
+}
+
+func printDAG(linkedList *list.List) {
+	listNode := linkedList.Front()
+	queue := make([]*list.Element, 0)
+	queue = append(queue, listNode)
+	var message string
+	var buffer string = ""
+	var dummyNode *list.Element
+	var startingNode bool = true
+	for listNode != nil {
+		if startingNode {
+			listNode = queue[0]
+			queue = queue[1:]
+			message = "|O"
+			for i := 0; i < listNode.Value.(*common.Node).Depth; i++ {
+				buffer += "    "
+			}
+			message = buffer + message
+			startingNode = false
+		} else {
+			message = message + " ->O"
+		}
+		for i := 0; i < len(listNode.Value.(*common.Node).Branches); i++ {
+			// Prepend
+			queue = append(queue, dummyNode)
+			copy(queue[1:], queue)
+			queue[0] = listNode.Value.(*common.Node).Branches[i].Front()
+		}
+		if listNode.Next() == nil {
+			println(message)
+			buffer = ""
+			if len(queue) > 0 {
+				startingNode = true
+			} else {
+				break
+			}
+		} else {
+			listNode = listNode.Next()
+		}
+	}
 }
 
 /////////////////////////////////////////
@@ -214,8 +319,10 @@ func (d *Driver) invokeFunction(metadata *InvocationMetadata) {
 	node := metadata.RootFunction.Front()
 	var record *mc.ExecutionRecord
 	var runtimeSpecifications *common.RuntimeSpecification
+	var branches []*list.List
 	for node != nil {
-		function := node.Value.(*common.Function)
+		function := node.Value.(*common.Node).Function
+		log.Infof("Function being Invoked is %s", function.Name)
 		runtimeSpecifications = &function.Specification.RuntimeSpecification[metadata.MinuteIndex][metadata.InvocationIndex]
 		switch d.Configuration.LoaderConfiguration.Platform {
 		case "Knative":
@@ -254,6 +361,13 @@ func (d *Driver) invokeFunction(metadata *InvocationMetadata) {
 			log.Debugf("Invocation failed at minute: %d for %s", metadata.MinuteIndex, function.Name)
 			break
 		}
+		branches = node.Value.(*common.Node).Branches
+		for i := 0; i < len(branches); i++ {
+			newMetadata := metadata
+			newMetadata.RootFunction = branches[i]
+			metadata.AnnounceDoneWG.Add(1)
+			go d.invokeFunction(newMetadata)
+		}
 		node = node.Next()
 	}
 	if success {
@@ -268,7 +382,7 @@ func (d *Driver) functionsDriver(list *list.List, announceFunctionDone *sync.Wai
 	addInvocationsToGroup *sync.WaitGroup, readOpenWhiskMetadata *sync.Mutex, totalSuccessful *int64,
 	totalFailed *int64, totalIssued *int64, recordOutputChannel chan interface{}) {
 
-	function := list.Front().Value.(*common.Function)
+	function := list.Front().Value.(*common.Node).Function
 	numberOfInvocations := 0
 	for i := 0; i < len(function.InvocationStats.Invocations); i++ {
 		numberOfInvocations += function.InvocationStats.Invocations[i]
@@ -561,6 +675,7 @@ func (d *Driver) internalRun(iatOnly bool, generated bool) {
 	var failedInvocations int64
 	var invocationsIssued int64
 	var functionsPerDAG int64
+	var functionLinkedList *list.List
 	readOpenWhiskMetadata := sync.Mutex{}
 	allFunctionsInvoked := sync.WaitGroup{}
 	allIndividualDriversCompleted := sync.WaitGroup{}
@@ -605,8 +720,9 @@ func (d *Driver) internalRun(iatOnly bool, generated bool) {
 
 	if d.Configuration.LoaderConfiguration.DAGMode {
 		log.Infof("Starting DAG invocation driver\n")
-		functionLinkedList := DAGCreation(d.Configuration.Functions)
-		functionsPerDAG = int64(len(d.Configuration.Functions))
+		functionLinkedList, functionsPerDAG = createDAGWorkflow(d.Configuration.Functions, 5, 20)
+		printDAG(functionLinkedList)
+		log.Infof("Total Number of Functions: %d", functionsPerDAG)
 		allIndividualDriversCompleted.Add(1)
 		go d.functionsDriver(
 			functionLinkedList,
@@ -623,8 +739,9 @@ func (d *Driver) internalRun(iatOnly bool, generated bool) {
 		functionsPerDAG = 1
 		for _, function := range d.Configuration.Functions {
 			allIndividualDriversCompleted.Add(1)
+			node := common.Node{Function: function}
 			linkedList := list.New()
-			linkedList.PushBack(function)
+			linkedList.PushBack(&node)
 			go d.functionsDriver(
 				linkedList,
 				&allIndividualDriversCompleted,
