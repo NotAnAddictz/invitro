@@ -133,10 +133,10 @@ func TestInvokeFunctionFromDriver(t *testing.T) {
 				// make sure that the gRPC server is running
 				time.Sleep(2 * time.Second)
 			}
-
+			function := testDriver.Configuration.Functions[0]
+			node := &common.Node{Function: testDriver.Configuration.Functions[0]}
 			list := list.New()
-			list.PushBack(testDriver.Configuration.Functions[0])
-			function := list.Front().Value.(*common.Function)
+			list.PushBack(node)
 			for i := 0; i < len(function.Specification.RuntimeSpecification); i++ {
 				function.Specification.RuntimeSpecification[i] = make([]common.RuntimeSpecification, 3)
 			}
@@ -184,14 +184,13 @@ func TestInvokeFunctionFromDriver(t *testing.T) {
 func TestDAGInvocation(t *testing.T) {
 	var successCount int64 = 0
 	var failureCount int64 = 0
-	var functionsToInvoke int = 4
-	invocationRecordOutputChannel := make(chan interface{}, functionsToInvoke)
+	invocationRecordOutputChannel := make(chan interface{}, 3)
 	announceDone := &sync.WaitGroup{}
 
 	testDriver := createTestDriver()
 	var failureCountByMinute = make([]int64, testDriver.Configuration.TraceDuration)
 	list := list.New()
-	address, port := "localhost", 8085
+	address, port := "localhost", 8084
 	function := testDriver.Configuration.Functions[0]
 	function.Endpoint = fmt.Sprintf("%s:%d", address, port)
 
@@ -203,7 +202,12 @@ func TestDAGInvocation(t *testing.T) {
 		Runtime: 1000,
 		Memory:  128,
 	}
-	for i := 0; i < functionsToInvoke; i++ {
+	functionList := make([]*common.Function, 3)
+	for i := 0; i < len(functionList); i++ {
+		functionList[i] = function
+	}
+	rootFunction, functionsToInvoke := createDAGWorkflow(functionList, 2, 2)
+	for i := 0; i < len(functionList); i++ {
 		function = testDriver.Configuration.Functions[0]
 		list.PushBack(function)
 	}
@@ -211,7 +215,7 @@ func TestDAGInvocation(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	metadata := &InvocationMetadata{
-		RootFunction:        list,
+		RootFunction:        rootFunction,
 		Phase:               common.ExecutionPhase,
 		MinuteIndex:         0,
 		InvocationIndex:     2,
@@ -224,10 +228,12 @@ func TestDAGInvocation(t *testing.T) {
 
 	announceDone.Add(1)
 	testDriver.invokeFunction(metadata)
-	if !(successCount == 1 && failureCount == 0) {
+	log.Printf("SuccessCount = %d", successCount)
+	announceDone.Wait()
+	if !(successCount == 2 && failureCount == 0) {
 		t.Error("The DAG invocation has failed.")
 	}
-	for i := 0; i < functionsToInvoke; i++ {
+	for i := 0; i < int(functionsToInvoke); i++ {
 		record := (<-invocationRecordOutputChannel).(*metric.ExecutionRecord)
 		if record.Phase != int(metadata.Phase) ||
 			record.InvocationID != composeInvocationID(common.MinuteGranularity, metadata.MinuteIndex, metadata.InvocationIndex) {
