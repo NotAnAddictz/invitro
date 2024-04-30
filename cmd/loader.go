@@ -27,9 +27,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"golang.org/x/exp/slices"
 	"os"
+	"os/exec"
 	"time"
+
+	"golang.org/x/exp/slices"
 
 	"github.com/vhive-serverless/loader/pkg/common"
 	"github.com/vhive-serverless/loader/pkg/config"
@@ -101,6 +103,15 @@ func main() {
 		log.Fatal("Unsupported platform! Supported platforms are [Knative, OpenWhisk, AWSLambda, Dirigent]")
 	}
 
+	if cfg.DAGMode {
+		filePath := "data/traces/traces/sampled_150"
+		_, err := os.Stat(filePath)
+		if err != nil {
+			getTrace()
+		}
+		// Taking for 10 functions only
+		cfg.TracePath = string(filePath) + "/10"
+	}
 	runTraceMode(&cfg, *iatGeneration, *generated)
 }
 
@@ -187,4 +198,22 @@ func runTraceMode(cfg *config.LoaderConfiguration, iatOnly bool, generated bool)
 	})
 
 	experimentDriver.RunExperiment(iatOnly, generated)
+}
+
+func getTrace() bool {
+	commands := [][]string{
+		{"git", "lfs", "pull"},
+		{"mkdir", "data/traces/traces"},
+		{"tar", "-xzf", "data/traces/reference/sampled_150.tar.gz", "-C", "data/traces/traces"},
+	}
+	for _, args := range commands {
+		cmd := exec.Command(args[0], args[1:]...)
+		stdoutStderr, err := cmd.CombinedOutput()
+		log.Debugf("CMD Response: %s", string(stdoutStderr))
+		if err != nil {
+			log.Warnf("Failed to get traces: %v\n%s\n", err, stdoutStderr)
+			return false
+		}
+	}
+	return true
 }

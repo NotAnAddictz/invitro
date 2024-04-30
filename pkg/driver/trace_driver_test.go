@@ -230,7 +230,7 @@ func TestDAGInvocation(t *testing.T) {
 	testDriver.invokeFunction(metadata)
 	log.Printf("SuccessCount = %d", successCount)
 	announceDone.Wait()
-	if !(successCount == 2 && failureCount == 0) {
+	if !(successCount == 1 && failureCount == 0) {
 		t.Error("The DAG invocation has failed.")
 	}
 	for i := 0; i < int(functionsToInvoke); i++ {
