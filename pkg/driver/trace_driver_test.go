@@ -190,7 +190,7 @@ func TestDAGInvocation(t *testing.T) {
 	testDriver := createTestDriver()
 	var failureCountByMinute = make([]int64, testDriver.Configuration.TraceDuration)
 	list := list.New()
-	address, port := "localhost", 8084
+	address, port := "localhost", 8085
 	function := testDriver.Configuration.Functions[0]
 	function.Endpoint = fmt.Sprintf("%s:%d", address, port)
 
@@ -206,7 +206,7 @@ func TestDAGInvocation(t *testing.T) {
 	for i := 0; i < len(functionList); i++ {
 		functionList[i] = function
 	}
-	rootFunction, functionsToInvoke := createDAGWorkflow(functionList, 2, 2)
+	rootFunction, functionsToInvoke := createDAGWorkflow(functionList, functionList[0], 2, 2)
 	for i := 0; i < len(functionList); i++ {
 		function = testDriver.Configuration.Functions[0]
 		list.PushBack(function)
@@ -237,7 +237,6 @@ func TestDAGInvocation(t *testing.T) {
 		record := (<-invocationRecordOutputChannel).(*metric.ExecutionRecord)
 		if record.Phase != int(metadata.Phase) ||
 			record.InvocationID != composeInvocationID(common.MinuteGranularity, metadata.MinuteIndex, metadata.InvocationIndex) {
-
 			t.Error("Invalid invocation record received.")
 		}
 	}

@@ -104,13 +104,11 @@ func main() {
 	}
 
 	if cfg.DAGMode {
-		filePath := "data/traces/traces/sampled_150"
-		_, err := os.Stat(filePath)
+		cfg.TracePath = cfg.DAGTracePath
+		_, err := os.Stat(cfg.DAGTracePath)
 		if err != nil {
 			getTrace()
 		}
-		// Taking for 10 functions only
-		cfg.TracePath = string(filePath) + "/10"
 	}
 	runTraceMode(&cfg, *iatGeneration, *generated)
 }
@@ -203,13 +201,11 @@ func runTraceMode(cfg *config.LoaderConfiguration, iatOnly bool, generated bool)
 func getTrace() bool {
 	commands := [][]string{
 		{"git", "lfs", "pull"},
-		{"mkdir", "data/traces/traces"},
-		{"tar", "-xzf", "data/traces/reference/sampled_150.tar.gz", "-C", "data/traces/traces"},
+		{"tar", "-xzf", "data/traces/reference/sampled_150.tar.gz", "-C", "data/traces"},
 	}
 	for _, args := range commands {
 		cmd := exec.Command(args[0], args[1:]...)
 		stdoutStderr, err := cmd.CombinedOutput()
-		log.Debugf("CMD Response: %s", string(stdoutStderr))
 		if err != nil {
 			log.Warnf("Failed to get traces: %v\n%s\n", err, stdoutStderr)
 			return false
