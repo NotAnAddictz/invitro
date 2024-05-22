@@ -53,9 +53,13 @@ type LoaderConfiguration struct {
 	MetricScrapingPeriodSeconds int    `json:"MetricScrapingPeriodSeconds"`
 	AutoscalingMetric           string `json:"AutoscalingMetric"`
 
-	GRPCConnectionTimeoutSeconds int  `json:"GRPCConnectionTimeoutSeconds"`
-	GRPCFunctionTimeoutSeconds   int  `json:"GRPCFunctionTimeoutSeconds"`
-	DAGMode                      bool `json:"DAGMode"`
+	GRPCConnectionTimeoutSeconds int    `json:"GRPCConnectionTimeoutSeconds"`
+	GRPCFunctionTimeoutSeconds   int    `json:"GRPCFunctionTimeoutSeconds"`
+	DAGMode                      bool   `json:"DAGMode"`
+	DAGTracePath                 string `json:"DAGTracePath"`
+	EnableDAGDataset             bool   `json:"EnableDAGDataset"`
+	Width                        int    `json:"Width"`
+	Depth                        int    `json:"Depth"`
 }
 
 func ReadConfigurationFile(path string) LoaderConfiguration {
