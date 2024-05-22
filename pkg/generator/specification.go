@@ -255,3 +255,4 @@ func (s *SpecificationGenerator) generateExecutionSpecs(function *common.Functio
 		Memory:  memory,
 	}
 }
+
