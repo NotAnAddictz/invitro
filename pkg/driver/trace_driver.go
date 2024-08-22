@@ -428,7 +428,11 @@ func (d *Driver) invokeFunction(metadata *InvocationMetadata) {
 	var branches []*list.List
 	var invocationRetries int
 	var numberOfFunctionsInvoked int64
+	var counter uint32 = 0
+	var functionDuration uint32 = 0
+	start := time.Now()
 	for node != nil {
+		counter+=1
 		function := node.Value.(*common.Node).Function
 		runtimeSpecifications = &function.Specification.RuntimeSpecification[metadata.MinuteIndex][metadata.InvocationIndex]
 		switch d.Configuration.LoaderConfiguration.Platform {
@@ -482,8 +486,10 @@ func (d *Driver) invokeFunction(metadata *InvocationMetadata) {
 			atomic.AddInt64(metadata.SuccessCount, -1)
 			go d.invokeFunction(newMetadata)
 		}
+		functionDuration+= record.ActualDuration
 		node = node.Next()
 	}
+	fmt.Printf("%s E2E Latency: %d , Avg Function Duration: %d\n",record.InvocationID,time.Since(start).Microseconds(),functionDuration/counter)
 	atomic.AddInt64(metadata.FunctionsInvoked, numberOfFunctionsInvoked)
 	if success {
 		atomic.AddInt64(metadata.SuccessCount, 1)
@@ -861,7 +867,7 @@ func (d *Driver) internalRun(iatOnly bool, generated bool) {
 				}
 			}
 			functionLinkedList := createDAGWorkflow(d.Configuration.Functions, function, width, depth)
-			printDAG(functionLinkedList)
+			// printDAG(functionLinkedList)
 			allIndividualDriversCompleted.Add(1)
 			go d.functionsDriver(
 				functionLinkedList,

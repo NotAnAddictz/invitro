@@ -90,7 +90,7 @@ func InvokeGRPC(function *common.Function, runtimeSpec *common.RuntimeSpecificat
 
 	response, err := grpcClient.Execute(executionCxt, &proto.FaasRequest{
 		Message:           "nothing",
-		RuntimeInMilliSec: uint32(runtimeSpec.Runtime),
+		RuntimeInMilliSec: uint32(1050),
 		MemoryInMebiBytes: uint32(runtimeSpec.Memory),
 	})
 
