@@ -868,6 +868,7 @@ func (d *Driver) internalRun(iatOnly bool, generated bool) {
 			}
 			functionLinkedList := createDAGWorkflow(d.Configuration.Functions, function, width, depth)
 			// printDAG(functionLinkedList)
+			// printDAG(functionLinkedList)
 			allIndividualDriversCompleted.Add(1)
 			go d.functionsDriver(
 				functionLinkedList,
