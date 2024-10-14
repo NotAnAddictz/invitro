@@ -27,7 +27,6 @@ package driver
 import (
 	"bytes"
 	"fmt"
-	"github.com/vhive-serverless/loader/pkg/common"
 	"io"
 	"math"
 	"math/rand"
@@ -37,6 +36,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/vhive-serverless/loader/pkg/common"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -75,8 +76,8 @@ func deployDirigent(function *common.Function) {
 		"port_forwarding":     {strconv.Itoa(metadata.Port), metadata.Protocol},
 		"scaling_upper_bound": {strconv.Itoa(metadata.ScalingUpperBound)},
 		"scaling_lower_bound": {strconv.Itoa(metadata.ScalingLowerBound)},
-		"requested_cpu":    {strconv.Itoa(function.CPURequestsMilli)},
-		"requested_memory": {strconv.Itoa(function.MemoryRequestsMiB)},
+		"requested_cpu":       {strconv.Itoa(function.CPURequestsMilli)},
+		"requested_memory":    {strconv.Itoa(function.MemoryRequestsMiB)},
 	}
 
 	log.Debug(payload)
@@ -99,6 +100,47 @@ func deployDirigent(function *common.Function) {
 	function.Endpoint = endpoints[rand.Intn(len(endpoints))]
 }
 
+func DeployAirflow(functions []*common.Function) {
+	// Create DAG size first
+	dagSize := []int{1, 2, 3, 4}
+	// Create and set DAGs for Airflow
+	for i := 0; i < len(functions); i++ {
+		createAirflowDAGs(functions[i], dagSize)
+	}
+
+	// Reset airflow and redeploy
+
+	// Set porting
+	cmd := "kubectl port-forward svc/airflow-webserver 8080:8080 --namespace airflow 1>/dev/null 2>&1 &"
+	if err := exec.Command("bash", "-c", cmd).Run(); err != nil {
+		fmt.Printf("Error executing command: %s\n", err)
+	} else {
+		fmt.Println("Command executed successfully")
+	}
+	// Deploy all DAGs down the list; for DAG in __ run deploy code:
+	for i := 0; i < len(functions); i++ {
+		deployAirflow(functions[i])
+	}
+}
+
+func createAirflowDAGs(function *common.Function, dagSize []int) {
+	// Generate python files for DAG and place at correct position
+
+}
+
+func deployAirflow(function *common.Function) bool {
+	deploy := fmt.Sprintf("scripts/deploy_workflow.sh %s", "hi")
+	if err := exec.Command("bash", "-c", deploy).Run(); err != nil {
+		fmt.Printf("Error executing command: %s\n", err)
+	} else {
+		fmt.Println("Command executed successfully")
+	}
+	// adding port to the endpoint
+	function.Endpoint = fmt.Sprintf("%s:%d", function.Endpoint, 8080)
+
+	log.Debugf("Deployed function on %s\n", function.Endpoint)
+	return true
+}
 func deployKnative(function *common.Function, yamlPath string, isPartiallyPanic bool, endpointPort int,
 	autoscalingMetric string) bool {
 	panicWindow := "\"10.0\""

@@ -1,0 +1,14 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  namespace: airflow
+  name: airflow-workflow-gateway
+spec:
+  template:
+    spec:
+      containers:
+        - image: "notanaddict/airflow-workflow-gateway:latest"
+          imagePullPolicy: Always
+          ports:
+            - name: http1
+              containerPort: 8081

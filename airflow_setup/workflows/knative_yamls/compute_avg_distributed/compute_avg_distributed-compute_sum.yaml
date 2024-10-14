@@ -1,0 +1,50 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  namespace: airflow
+  name: airflow-worker-compute-avg-distributed-compute-sum
+  annotations:
+    dag_id: compute_avg_distributed
+    task_id: compute_sum
+spec:
+  template:
+    spec:
+      containers:
+        - image: "notanaddict/airflow-worker:latest"
+          imagePullPolicy: Always
+          ports:
+            - name: h2c
+              containerPort: 50000
+          env:
+            - name: AIRFLOW__CORE__EXECUTOR
+              value: LocalExecutor
+            - name: AIRFLOW_IS_K8S_EXECUTOR_POD
+              value: "True"
+            - name: AIRFLOW_DAG_ID
+              value: compute_avg_distributed
+            - name: AIRFLOW_TASK_ID
+              value: compute_sum
+            # Hard Coded Airflow Envs
+            - name: AIRFLOW__CORE__FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-fernet-key
+                  key: fernet-key
+            - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-metadata
+                  key: connection
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-metadata
+                  key: connection
+            - name: AIRFLOW_CONN_AIRFLOW_DB
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-metadata
+                  key: connection
+    metadata:
+      annotations:
+        autoscaling.knative.dev/window: "60s"

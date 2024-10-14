@@ -96,6 +96,7 @@ func main() {
 		"OpenWhisk",
 		"AWSLambda",
 		"Dirigent",
+		"Airflow",
 	}
 
 	if !slices.Contains(supportedPlatforms, cfg.Platform) {

@@ -947,6 +947,9 @@ func (d *Driver) RunExperiment(iatOnly bool, generated bool) {
 		DeployFunctionsAWSLambda(d.Configuration.Functions)
 	case "Dirigent":
 		DeployDirigent(d.Configuration.Functions)
+	case "Airflow":
+		// getDAGStats()
+		DeployAirflow(d.Configuration.Functions)
 	default:
 		log.Fatal("Unsupported platform.")
 	}
